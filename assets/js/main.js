@@ -36,23 +36,70 @@
   }
 
   /* ---------------- Mobile navigation ---------------- */
+  /*
+   * Scroll-lock uses the "freeze body at its current scroll position"
+   * technique instead of plain `overflow:hidden`. On iOS Safari,
+   * `overflow:hidden` alone does not reliably stop the page from
+   * scrolling/rubber-banding behind a `position:fixed` overlay, and the
+   * dynamic address bar can then shift the fixed menu so it appears
+   * anchored too high (the first item or two rendered above the visible
+   * viewport). Locking via `position:fixed` on the body removes it from
+   * the scroll flow entirely, which is the reliable cross-browser fix.
+   */
+  var lockedScrollY = 0;
+
+  function lockScroll() {
+    lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.position = "fixed";
+    document.body.style.top = -lockedScrollY + "px";
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+  }
+
+  function unlockScroll() {
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.width = "";
+    // Restore instantly — the page's global `scroll-behavior: smooth`
+    // would otherwise animate this jump and look like an odd scroll-hijack.
+    var root = document.documentElement;
+    var prevBehavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollTo(0, lockedScrollY);
+    root.style.scrollBehavior = prevBehavior;
+  }
+
   function initNav() {
     var toggle = document.querySelector(".menu-toggle");
     var nav = document.querySelector(".nav-desktop");
     if (!toggle || !nav) return;
 
+    var closeNav = function () {
+      nav.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+      unlockScroll();
+    };
+
     toggle.addEventListener("click", function () {
-      var open = nav.classList.toggle("open");
-      toggle.setAttribute("aria-expanded", String(open));
-      document.body.style.overflow = open ? "hidden" : "";
+      var willOpen = !nav.classList.contains("open");
+      if (willOpen) {
+        nav.classList.add("open");
+        toggle.setAttribute("aria-expanded", "true");
+        lockScroll();
+      } else {
+        closeNav();
+      }
     });
 
     nav.querySelectorAll("a").forEach(function (link) {
-      link.addEventListener("click", function () {
-        nav.classList.remove("open");
-        toggle.setAttribute("aria-expanded", "false");
-        document.body.style.overflow = "";
-      });
+      link.addEventListener("click", closeNav);
+    });
+
+    window.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && nav.classList.contains("open")) closeNav();
     });
   }
 
